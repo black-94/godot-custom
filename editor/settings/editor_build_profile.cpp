@@ -819,7 +819,7 @@ void EditorBuildProfileManager::_find_files(EditorFileSystemDirectory *p_dir, co
 		// Make so that the import file is the one checked if available,
 		// so the cache can be updated when it changes.
 		if (ResourceFormatImporter::get_singleton()->exists(p_check)) {
-			p_check += ".import";
+			p_check = ResourceFormatImporter::get_import_path(p_check);
 		}
 
 		uint64_t timestamp = 0;

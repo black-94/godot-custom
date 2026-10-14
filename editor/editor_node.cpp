@@ -1806,7 +1806,7 @@ void EditorNode::save_resource(const Ref<Resource> &p_resource) {
 
 	// If the resource has been imported, ask the user to use a different path in order to save it.
 	String path = p_resource->get_path();
-	if (path.is_resource_file() && !FileAccess::exists(path + ".import")) {
+	if (path.is_resource_file() && !FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 		save_resource_in_path(p_resource, p_resource->get_path());
 	} else {
 		save_resource_as(p_resource);
@@ -1821,7 +1821,7 @@ void EditorNode::save_resource_as(const Ref<Resource> &p_resource, const String 
 		// Early exit checks.
 
 		if (is_resource) {
-			if (FileAccess::exists(resource_path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(resource_path))) {
 				show_warning(TTR("This resource can't be saved because it was imported from another file. Make it unique first."));
 				return;
 			}
@@ -3175,7 +3175,7 @@ void EditorNode::_edit_current(bool p_skip_foreign, bool p_skip_inspector_update
 		int subr_idx = current_res->get_path().find("::");
 		if (subr_idx != -1) {
 			String base_path = current_res->get_path().substr(0, subr_idx);
-			if (FileAccess::exists(base_path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(base_path))) {
 				if (!base_path.is_resource_file()) {
 					if (get_edited_scene() && get_edited_scene()->get_scene_file_path() == base_path) {
 						info_is_warning = true;
@@ -3186,7 +3186,7 @@ void EditorNode::_edit_current(bool p_skip_foreign, bool p_skip_inspector_update
 				editable_info = TTR("This resource belongs to a scene that was instantiated or inherited.\nChanges to it must be made inside the original scene.");
 			}
 		} else if (current_res->get_path().is_resource_file()) {
-			if (FileAccess::exists(current_res->get_path() + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(current_res->get_path()))) {
 				editable_info = TTR("This resource was imported, so it's not editable. Change its settings in the import panel and then re-import.");
 			}
 		}
@@ -3218,7 +3218,7 @@ void EditorNode::_edit_current(bool p_skip_foreign, bool p_skip_inspector_update
 
 		if (get_edited_scene() && !get_edited_scene()->get_scene_file_path().is_empty()) {
 			String source_scene = get_edited_scene()->get_scene_file_path();
-			if (FileAccess::exists(source_scene + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(source_scene))) {
 				editable_info = TTR("This scene was imported, so changes to it won't be kept.\nInstantiating or inheriting it will allow you to make changes to it.\nPlease read the documentation relevant to importing scenes to better understand this workflow.");
 				info_is_warning = true;
 			}
@@ -4860,7 +4860,7 @@ Error EditorNode::load_scene(const String &p_scene, bool p_ignore_broken_deps, b
 			}
 		}
 
-		if (!p_force_open_imported && FileAccess::exists(lpath + ".import")) {
+		if (!p_force_open_imported && FileAccess::exists(ResourceFormatImporter::get_import_path(lpath))) {
 			open_imported->set_text(vformat(TTR("Scene '%s' was automatically imported, so it can't be modified.\nTo make changes to it, a new inherited scene can be created."), lpath.get_file()));
 			open_imported->popup_centered();
 			new_inherited_button->grab_focus();
@@ -5371,18 +5371,18 @@ bool EditorNode::is_resource_read_only(Ref<Resource> p_resource, bool p_foreign_
 				if (!get_tree()->get_edited_scene_root() || get_tree()->get_edited_scene_root()->get_scene_file_path() != base) {
 					// If we have not flagged foreign resources as writable or the base scene the resource is
 					// part was imported, it can be considered read-only.
-					if (!p_foreign_resources_are_writable || FileAccess::exists(base + ".import")) {
+					if (!p_foreign_resources_are_writable || FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 						return true;
 					}
 				}
 			} else {
 				// If a corresponding .import file exists for the base file, we assume it to be imported and should therefore treated as read-only.
-				if (FileAccess::exists(base + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 					return true;
 				}
 			}
 		}
-	} else if (FileAccess::exists(path + ".import")) {
+	} else if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 		// The resource is not a subresource, but if it has an .import file, it's imported so treat it as read only.
 		return true;
 	}

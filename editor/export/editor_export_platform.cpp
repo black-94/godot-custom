@@ -40,6 +40,7 @@
 #include "core/io/file_access_pack.h" // PACK_HEADER_MAGIC, PACK_FORMAT_VERSION
 #include "core/io/image.h"
 #include "core/io/image_loader.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/io/resource_saver.h"
 #include "core/io/resource_uid.h"
@@ -1030,9 +1031,9 @@ String EditorExportPlatform::_export_customize(const String &p_path, LocalVector
 			}
 
 			String md5 = FileAccess::get_md5(p_path);
-			if (FileAccess::exists(p_path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_path))) {
 				// Also consider the import file in the string
-				md5 += FileAccess::get_md5(p_path + ".import");
+				md5 += FileAccess::get_md5(ResourceFormatImporter::get_import_path(p_path));
 			}
 			if (fec.source_md5 == md5) {
 				// Cached (md5 matches).
@@ -1048,9 +1049,9 @@ String EditorExportPlatform::_export_customize(const String &p_path, LocalVector
 	fec.source_modified_time = FileAccess::get_modified_time(p_path);
 
 	String md5 = FileAccess::get_md5(p_path);
-	if (FileAccess::exists(p_path + ".import")) {
+	if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_path))) {
 		// Also consider the import file in the string
-		md5 += FileAccess::get_md5(p_path + ".import");
+		md5 += FileAccess::get_md5(ResourceFormatImporter::get_import_path(p_path));
 	}
 
 	fec.source_md5 = md5;
@@ -1522,11 +1523,11 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 		idx++;
 		String type = ResourceLoader::get_resource_type(path);
 
-		bool has_import_file = FileAccess::exists(path + ".import");
+		bool has_import_file = FileAccess::exists(ResourceFormatImporter::get_import_path(path));
 		Ref<ConfigFile> config;
 		if (has_import_file) {
 			config.instantiate();
-			err = config->load(path + ".import");
+			err = config->load(ResourceFormatImporter::get_import_path(path));
 			if (err != OK) {
 				ERR_PRINT("Could not parse: '" + path + "', not exported.");
 				continue;
@@ -1840,6 +1841,15 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 	String config_file = "project.binary";
 	String engine_cfb = EditorPaths::get_singleton()->get_temp_dir().path_join("tmp" + config_file);
 	ProjectSettings::CustomMap custom_map = get_custom_project_settings(p_preset);
+	// Sidecars in the exported package use their canonical adjacent paths.
+	custom_map["filesystem/import/sidecar_root"] = String();
+	List<PropertyInfo> project_properties;
+	ProjectSettings::get_singleton()->get_property_list(&project_properties);
+	for (const PropertyInfo &property : project_properties) {
+		if (property.name.begins_with("filesystem/import/sidecar_root.")) {
+			custom_map[property.name] = String();
+		}
+	}
 	ProjectSettings::get_singleton()->save_custom(engine_cfb, custom_map, custom_list);
 	Vector<uint8_t> data = FileAccess::get_file_as_bytes(engine_cfb);
 	DirAccess::remove_file_or_error(engine_cfb);

@@ -31,6 +31,7 @@
 #include "animation_library_editor.h"
 
 #include "core/io/config_file.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
@@ -165,7 +166,7 @@ void AnimationLibraryEditor::_file_popup_selected(int p_id) {
 	}
 	switch (p_id) {
 		case FILE_MENU_SAVE_LIBRARY: {
-			if (al->get_path().is_resource_file() && !FileAccess::exists(al->get_path() + ".import")) {
+			if (al->get_path().is_resource_file() && !FileAccess::exists(ResourceFormatImporter::get_import_path(al->get_path()))) {
 				EditorNode::get_singleton()->save_resource(al);
 				break;
 			}
@@ -186,7 +187,7 @@ void AnimationLibraryEditor::_file_popup_selected(int p_id) {
 						}
 					}
 				} else {
-					if (FileAccess::exists(al_path + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(al_path))) {
 						error_dialog->set_text(TTR("This animation library can't be saved because it was imported from another file. Make it unique first."));
 						error_dialog->popup_centered();
 						return;
@@ -243,7 +244,7 @@ void AnimationLibraryEditor::_file_popup_selected(int p_id) {
 		} break;
 
 		case FILE_MENU_SAVE_ANIMATION: {
-			if (anim->get_path().is_resource_file() && !FileAccess::exists(anim->get_path() + ".import")) {
+			if (anim->get_path().is_resource_file() && !FileAccess::exists(ResourceFormatImporter::get_import_path(anim->get_path()))) {
 				EditorNode::get_singleton()->save_resource(anim);
 				break;
 			}
@@ -264,7 +265,7 @@ void AnimationLibraryEditor::_file_popup_selected(int p_id) {
 						}
 					}
 				} else {
-					if (FileAccess::exists(anim_path + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(anim_path))) {
 						error_dialog->set_text(TTR("This animation can't be saved because it was imported from another file. Make it unique first."));
 						error_dialog->popup_centered();
 						return;
@@ -716,14 +717,14 @@ void AnimationLibraryEditor::update_tree() {
 						libitem->set_text(1, TTR("[foreign]"));
 					}
 				} else {
-					if (FileAccess::exists(base + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 						animation_library_is_foreign = true;
 						libitem->set_text(1, TTR("[imported]"));
 					}
 				}
 			}
 		} else {
-			if (FileAccess::exists(al_path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(al_path))) {
 				animation_library_is_foreign = true;
 				libitem->set_text(1, TTR("[imported]"));
 			} else {
@@ -767,13 +768,13 @@ void AnimationLibraryEditor::update_tree() {
 							anitem->set_text(1, TTR("[foreign]"));
 						}
 					} else {
-						if (FileAccess::exists(base + ".import")) {
+						if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 							anitem->set_text(1, TTR("[imported]"));
 						}
 					}
 				}
 			} else {
-				if (FileAccess::exists(anim_path + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(anim_path))) {
 					anitem->set_text(1, TTR("[imported]"));
 				} else {
 					anitem->set_text(1, anim_path.get_file());

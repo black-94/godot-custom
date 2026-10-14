@@ -1704,6 +1704,8 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF("application/config/project_settings_override", "");
 	GLOBAL_DEF("application/config/disable_project_settings_override", false);
 
+	GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "filesystem/import/sidecar_root", PROPERTY_HINT_GLOBAL_DIR), "");
+
 	GLOBAL_DEF("application/run/main_loop_type", "SceneTree");
 	GLOBAL_DEF("application/config/auto_accept_quit", true);
 	GLOBAL_DEF("application/config/quit_on_go_back", true);

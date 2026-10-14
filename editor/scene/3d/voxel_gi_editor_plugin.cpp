@@ -30,6 +30,7 @@
 
 #include "voxel_gi_editor_plugin.h"
 
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
@@ -65,14 +66,14 @@ void VoxelGIEditorPlugin::_bake() {
 							return;
 						}
 					} else {
-						if (FileAccess::exists(base + ".import")) {
+						if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 							EditorNode::get_singleton()->show_warning(TTR("Voxel GI data is part of an imported resource."));
 							return;
 						}
 					}
 				}
 			} else {
-				if (FileAccess::exists(path + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 					EditorNode::get_singleton()->show_warning(TTR("Voxel GI data is an imported resource."));
 					return;
 				}

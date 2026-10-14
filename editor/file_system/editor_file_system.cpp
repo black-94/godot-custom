@@ -299,7 +299,7 @@ void EditorFileSystem::_scan_for_uid_directory(const ScannedDirectory *p_scan_di
 		const String path = p_scan_dir->full_path.path_join(scan_file);
 		ResourceUID::ID uid = ResourceUID::INVALID_ID;
 		if (p_import_extensions.has(ext)) {
-			if (FileAccess::exists(path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 				uid = ResourceFormatImporter::get_singleton()->get_resource_uid(path);
 			}
 		} else {
@@ -592,13 +592,13 @@ bool EditorFileSystem::_test_for_reimport(const String &p_path, const String &p_
 		// Marked as reimportation needed.
 		return true;
 	}
-	String new_md5 = FileAccess::get_md5(p_path + ".import");
+	String new_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(p_path));
 	if (p_expected_import_md5 != new_md5) {
 		return true;
 	}
 
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(ResourceFormatImporter::get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) { // No import file, reimport.
 		return true;
@@ -758,7 +758,7 @@ bool EditorFileSystem::_test_for_reimport(const String &p_path, const String &p_
 
 Vector<String> EditorFileSystem::_get_import_dest_paths(const String &p_path) {
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(ResourceFormatImporter::get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) { // No import file, reimport.
 		return Vector<String>();
@@ -1006,9 +1006,9 @@ bool EditorFileSystem::_update_scan_actions() {
 					// Must not reimport, all was good.
 					// Update modified times, md5 and destination paths, to avoid reimport.
 					ia.dir->files[idx]->modified_time = FileAccess::get_modified_time(full_path);
-					ia.dir->files[idx]->import_modified_time = FileAccess::get_modified_time(full_path + ".import");
+					ia.dir->files[idx]->import_modified_time = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(full_path));
 					if (ia.dir->files[idx]->import_md5.is_empty()) {
-						ia.dir->files[idx]->import_md5 = FileAccess::get_md5(full_path + ".import");
+						ia.dir->files[idx]->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(full_path));
 					}
 					ia.dir->files[idx]->import_dest_paths = _get_import_dest_paths(full_path);
 				}
@@ -1259,7 +1259,7 @@ void EditorFileSystem::_process_file_system(const ScannedDirectory *p_scan_dir, 
 
 		if (_can_import_file(scan_file)) {
 			//is imported
-			uint64_t import_mt = FileAccess::get_modified_time(path + ".import");
+			uint64_t import_mt = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(path));
 
 			if (fc) {
 				fi->type = fc->type;
@@ -1277,7 +1277,7 @@ void EditorFileSystem::_process_file_system(const ScannedDirectory *p_scan_dir, 
 				// Ensures backward compatibility when the project is loaded for the first time with the added import_md5
 				// and import_dest_paths properties in the file cache.
 				if (fc->import_md5.is_empty()) {
-					fi->import_md5 = FileAccess::get_md5(path + ".import");
+					fi->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(path));
 					fi->import_dest_paths = _get_import_dest_paths(path);
 				}
 
@@ -1313,7 +1313,7 @@ void EditorFileSystem::_process_file_system(const ScannedDirectory *p_scan_dir, 
 				fi->class_info = _get_global_script_class(fi->type, path);
 				fi->modified_time = 0;
 				fi->import_modified_time = 0;
-				fi->import_md5 = FileAccess::get_md5(path + ".import");
+				fi->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(path));
 				fi->import_dest_paths = Vector<String>();
 				fi->import_valid = (fi->type == "TextFile" || fi->type == "OtherFile") ? true : ResourceLoader::is_import_valid(path);
 
@@ -1585,7 +1585,7 @@ void EditorFileSystem::_scan_fs_changes(EditorFileSystemDirectory *p_dir, ScanPr
 			// needs to be trusted to prevent reading all the .import files and the md5
 			// each time the user switch back to Godot.
 			uint64_t mt = FileAccess::get_modified_time(path);
-			uint64_t import_mt = FileAccess::get_modified_time(path + ".import");
+			uint64_t import_mt = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(path));
 			if (_is_test_for_reimport_needed(path, p_dir->files[i]->modified_time, mt, p_dir->files[i]->import_modified_time, import_mt, p_dir->files[i]->import_dest_paths)) {
 				ItemAction ia;
 				ia.action = ItemAction::ACTION_FILE_TEST_REIMPORT;
@@ -1632,14 +1632,15 @@ void EditorFileSystem::_scan_fs_changes(EditorFileSystemDirectory *p_dir, ScanPr
 }
 
 void EditorFileSystem::_delete_internal_files(const String &p_file) {
-	if (FileAccess::exists(p_file + ".import")) {
+	if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_file))) {
 		List<String> paths;
 		ResourceFormatImporter::get_singleton()->get_internal_resource_path_list(p_file, &paths);
 		Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_RESOURCES);
 		for (const String &E : paths) {
 			da->remove(E);
 		}
-		da->remove(p_file + ".import");
+		Error err = ResourceFormatImporter::remove_import_file(p_file);
+		ERR_FAIL_COND_MSG(err != OK, vformat("Cannot remove import metadata for '%s'.", p_file));
 	}
 	if (FileAccess::exists(p_file + ".uid")) {
 		DirAccess::remove_absolute(p_file + ".uid");
@@ -2623,7 +2624,7 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 	for (int i = 0; i < p_files.size(); i++) {
 		Ref<ConfigFile> config;
 		config.instantiate();
-		Error err = config->load(p_files[i] + ".import");
+		Error err = config->load(ResourceFormatImporter::get_import_path(p_files[i]));
 		ERR_CONTINUE(err != OK);
 		ERR_CONTINUE(!config->has_section_key("remap", "importer"));
 		String file_importer_name = config->get_value("remap", "importer");
@@ -2688,8 +2689,8 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 		Vector<String> dest_paths;
 		ResourceUID::ID uid = uids[file];
 		{
-			Ref<FileAccess> f = FileAccess::open(file + ".import", FileAccess::WRITE);
-			ERR_FAIL_COND_V_MSG(f.is_null(), ERR_FILE_CANT_OPEN, "Cannot open import file '" + file + ".import'.");
+			Ref<FileAccess> f = ResourceFormatImporter::open_import_file(file);
+			ERR_FAIL_COND_V_MSG(f.is_null(), ERR_FILE_CANT_OPEN, vformat("Cannot open import metadata '%s'.", ResourceFormatImporter::get_import_write_path(file)));
 
 			//write manually, as order matters ([remap] has to go first for performance).
 			f->store_line("[remap]");
@@ -2752,6 +2753,8 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 				VariantWriter::write_to_string(v, value);
 				f->store_line(base + "=" + value);
 			}
+			Error save_err = ResourceFormatImporter::commit_import_file(file, f);
+			ERR_FAIL_COND_V(save_err != OK, save_err);
 		}
 
 		// Store the md5's of the various files. These are stored separately so that the .import files can be version controlled.
@@ -2772,8 +2775,8 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 
 		//update modified times, to avoid reimport
 		fs->files[cpos]->modified_time = FileAccess::get_modified_time(file);
-		fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(file + ".import");
-		fs->files[cpos]->import_md5 = FileAccess::get_md5(file + ".import");
+		fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(file));
+		fs->files[cpos]->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(file));
 		fs->files[cpos]->import_dest_paths = dest_paths;
 		fs->files[cpos]->deps = _get_dependencies(file);
 		fs->files[cpos]->uid = uid;
@@ -2837,11 +2840,11 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 		generator_parameters = *p_generator_parameters;
 	}
 
-	if (FileAccess::exists(p_file + ".import")) {
+	if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_file))) {
 		//use existing
 		Ref<ConfigFile> cf;
 		cf.instantiate();
-		Error err = cf->load(p_file + ".import");
+		Error err = cf->load(ResourceFormatImporter::get_import_path(p_file));
 		if (err == OK) {
 			if (cf->has_section("params")) {
 				Vector<String> sk = cf->get_section_keys("params");
@@ -2879,8 +2882,8 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 		//keep files, do nothing.
 		if (p_update_file_system) {
 			fs->files[cpos]->modified_time = FileAccess::get_modified_time(p_file);
-			fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(p_file + ".import");
-			fs->files[cpos]->import_md5 = FileAccess::get_md5(p_file + ".import");
+			fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(p_file));
+			fs->files[cpos]->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(p_file));
 			fs->files[cpos]->import_dest_paths = Vector<String>();
 			fs->files[cpos]->deps.clear();
 			fs->files[cpos]->type = "";
@@ -2905,7 +2908,7 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 		}
 	}
 
-	if (FileAccess::exists(p_file + ".import")) {
+	if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_file))) {
 		// We only want to handle compat for existing files, not new ones.
 		importer->handle_compatibility_options(params);
 	}
@@ -2945,8 +2948,8 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 
 	Vector<String> dest_paths;
 	{
-		Ref<FileAccess> f = FileAccess::open(p_file + ".import", FileAccess::WRITE);
-		ERR_FAIL_COND_V_MSG(f.is_null(), ERR_FILE_CANT_OPEN, "Cannot open file from path '" + p_file + ".import'.");
+		Ref<FileAccess> f = ResourceFormatImporter::open_import_file(p_file);
+		ERR_FAIL_COND_V_MSG(f.is_null(), ERR_FILE_CANT_OPEN, vformat("Cannot open import metadata '%s'.", ResourceFormatImporter::get_import_write_path(p_file)));
 
 		// Write manually, as order matters ([remap] has to go first for performance).
 		f->store_line("[remap]");
@@ -3033,6 +3036,8 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 			VariantWriter::write_to_string(params[base], value);
 			f->store_line(base + "=" + value);
 		}
+		Error save_err = ResourceFormatImporter::commit_import_file(p_file, f);
+		ERR_FAIL_COND_V(save_err != OK, save_err);
 	}
 
 	// Store the md5's of the various files. These are stored separately so that the .import files can be version controlled.
@@ -3052,8 +3057,8 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 
 		// Update modified times, to avoid reimport.
 		fs->files[cpos]->modified_time = FileAccess::get_modified_time(p_file);
-		fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(p_file + ".import");
-		fs->files[cpos]->import_md5 = FileAccess::get_md5(p_file + ".import");
+		fs->files[cpos]->import_modified_time = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(p_file));
+		fs->files[cpos]->import_md5 = FileAccess::get_md5(ResourceFormatImporter::get_import_path(p_file));
 		fs->files[cpos]->import_dest_paths = dest_paths;
 		fs->files[cpos]->deps = _get_dependencies(p_file);
 		fs->files[cpos]->type = importer->get_resource_type();
@@ -3126,7 +3131,7 @@ void EditorFileSystem::reimport_file_with_custom_parameters(const String &p_file
 
 Error EditorFileSystem::_copy_file(const String &p_from, const String &p_to) {
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_RESOURCES);
-	if (FileAccess::exists(p_from + ".import")) {
+	if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_from))) {
 		Error err = da->copy(p_from, p_to);
 		if (err != OK) {
 			return err;
@@ -3135,18 +3140,19 @@ Error EditorFileSystem::_copy_file(const String &p_from, const String &p_to) {
 		// Save the new .import file
 		Ref<ConfigFile> cfg;
 		cfg.instantiate();
-		cfg->load(p_from + ".import");
+		Error load_err = cfg->load(ResourceFormatImporter::get_import_path(p_from));
+		ERR_FAIL_COND_V(load_err != OK, load_err);
 		String importer_name = cfg->get_value("remap", "importer");
 
 		if (importer_name == "keep" || importer_name == "skip") {
-			err = da->copy(p_from + ".import", p_to + ".import");
+			err = ResourceFormatImporter::save_import_file(p_to, cfg);
 			return err;
 		}
 
 		// Roll a new uid for this copied .import file to avoid conflict.
 		ResourceUID::ID res_uid = ResourceUID::get_singleton()->create_id_for_path(p_to);
 		cfg->set_value("remap", "uid", ResourceUID::get_singleton()->id_to_text(res_uid));
-		err = cfg->save(p_to + ".import");
+		err = ResourceFormatImporter::save_import_file(p_to, cfg);
 		if (err != OK) {
 			return err;
 		}
@@ -3520,7 +3526,7 @@ void EditorFileSystem::_move_group_files(EditorFileSystemDirectory *efd, const S
 
 			Ref<ConfigFile> config;
 			config.instantiate();
-			String path = efd->get_file_path(i) + ".import";
+			String path = ResourceFormatImporter::get_import_path(efd->get_file_path(i));
 			Error err = config->load(path);
 			if (err != OK) {
 				continue;
@@ -3538,7 +3544,8 @@ void EditorFileSystem::_move_group_files(EditorFileSystemDirectory *efd, const S
 				}
 			}
 
-			config->save(path);
+			Error save_err = ResourceFormatImporter::save_import_file(efd->get_file_path(i), config);
+			ERR_CONTINUE(save_err != OK);
 		}
 	}
 

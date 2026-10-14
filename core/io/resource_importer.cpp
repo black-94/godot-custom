@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/config_file.h"
+#include "core/io/dir_access.h"
 #include "core/io/image.h"
 #include "core/object/class_db.h"
 #include "core/os/os.h"
@@ -41,9 +42,163 @@ bool ResourceFormatImporter::SortImporterByName::operator()(const Ref<ResourceIm
 	return p_a->get_importer_name() < p_b->get_importer_name();
 }
 
+String ResourceFormatImporter::get_import_write_path(const String &p_path) {
+	ProjectSettings *settings = ProjectSettings::get_singleton();
+	const String root = GLOBAL_GET("filesystem/import/sidecar_root");
+	if (root.is_empty()) {
+		return p_path + ".import";
+	}
+	const String path = settings->localize_path(p_path).simplify_path();
+	// Only project resources have a relative path to mirror under the root.
+	if (!path.begins_with("res://")) {
+		return p_path + ".import";
+	}
+	const String relative_path = path.trim_prefix("res://");
+	ERR_FAIL_COND_V_MSG(relative_path.is_empty() || relative_path == ".." || relative_path.begins_with("../"), String(), "Import sidecar path must stay inside the resource root.");
+	const String base = root.is_relative_path() ? String("res://").path_join(root) : root;
+	return base.simplify_path().path_join(relative_path) + ".import";
+}
+
+String ResourceFormatImporter::get_import_path(const String &p_path) {
+	const String preferred = get_import_write_path(p_path);
+	if (FileAccess::exists(preferred)) {
+		return preferred;
+	}
+	// Migrate existing projects incrementally, when metadata is next written.
+	return p_path + ".import";
+}
+
+Ref<FileAccess> ResourceFormatImporter::open_import_file(const String &p_path, Error *r_error) {
+	const String path = get_import_write_path(p_path);
+	Error err = path.is_empty() ? ERR_INVALID_PARAMETER : DirAccess::make_dir_recursive_absolute(path.get_base_dir());
+	if (err != OK) {
+		if (r_error) {
+			*r_error = err;
+		}
+		return Ref<FileAccess>();
+	}
+	// Do not truncate existing metadata until the entire new file has been written.
+	return FileAccess::open(path + ".tmp", FileAccess::WRITE, r_error);
+}
+
+Error ResourceFormatImporter::commit_import_file(const String &p_path, const Ref<FileAccess> &p_file) {
+	ERR_FAIL_COND_V(p_file.is_null(), ERR_INVALID_PARAMETER);
+	const uint64_t expected_size = p_file->get_position();
+	p_file->flush();
+	const Error write_error = p_file->get_error();
+	p_file->close();
+	if (write_error != OK) {
+		return write_error;
+	}
+	const String path = get_import_write_path(p_path);
+	// Some backends do not report buffered flush errors through get_error().
+	Error err;
+	Ref<FileAccess> staged = FileAccess::open(path + ".tmp", FileAccess::READ, &err);
+	if (staged.is_null()) {
+		return err;
+	}
+	if (staged->get_length() != expected_size) {
+		return ERR_FILE_CANT_WRITE;
+	}
+	staged->close();
+	err = DirAccess::rename_absolute(path + ".tmp", path);
+	if (err != OK) {
+		return err;
+	}
+	const String legacy_path = p_path + ".import";
+	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	if (FileAccess::exists(legacy_path) && !da->is_equivalent(ProjectSettings::get_singleton()->globalize_path(path), ProjectSettings::get_singleton()->globalize_path(legacy_path))) {
+		err = DirAccess::remove_absolute(legacy_path);
+		ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Saved import metadata to '%s', but could not remove legacy sidecar '%s'.", path, legacy_path));
+	}
+	return OK;
+}
+
+Error ResourceFormatImporter::save_import_file(const String &p_path, const Ref<ConfigFile> &p_config) {
+	Error err;
+	Ref<FileAccess> file = open_import_file(p_path, &err);
+	if (file.is_null()) {
+		return err;
+	}
+	if (!file->store_string(p_config->encode_to_text())) {
+		return ERR_FILE_CANT_WRITE;
+	}
+	return commit_import_file(p_path, file);
+}
+
+Error ResourceFormatImporter::remove_import_file(const String &p_path) {
+	const String preferred = get_import_write_path(p_path);
+	if (FileAccess::exists(preferred)) {
+		Error err = DirAccess::remove_absolute(preferred);
+		if (err != OK) {
+			return err;
+		}
+	}
+	const String legacy = p_path + ".import";
+	if (FileAccess::exists(legacy)) {
+		return DirAccess::remove_absolute(legacy);
+	}
+	return OK;
+}
+
+Error ResourceFormatImporter::move_import_file(const String &p_from, const String &p_to) {
+	if (p_from == p_to) {
+		return OK;
+	}
+	const String source_path = get_import_path(p_from);
+	if (!FileAccess::exists(source_path)) {
+		// A directory rename may already have moved the adjacent legacy sidecar.
+		const String legacy = p_to + ".import";
+		if (!FileAccess::exists(legacy)) {
+			return OK;
+		}
+		if (get_import_write_path(p_to) == legacy) {
+			return OK;
+		}
+		Ref<ConfigFile> config;
+		config.instantiate();
+		Error err = config->load(legacy);
+		return err == OK ? save_import_file(p_to, config) : err;
+	}
+	Error err;
+	Ref<FileAccess> source = FileAccess::open(source_path, FileAccess::READ, &err);
+	if (source.is_null()) {
+		return err;
+	}
+	const Vector<uint8_t> data = source->get_buffer(source->get_length());
+	if (source->get_error() != OK) {
+		return source->get_error();
+	}
+	source->close();
+	Ref<FileAccess> target = open_import_file(p_to, &err);
+	if (target.is_null()) {
+		return err;
+	}
+	if (!target->store_buffer(data)) {
+		return ERR_FILE_CANT_WRITE;
+	}
+	err = commit_import_file(p_to, target);
+	if (err != OK) {
+		return err;
+	}
+	// On case-insensitive filesystems, the old spelling may alias the new file.
+	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+	const String destination = ProjectSettings::get_singleton()->globalize_path(get_import_write_path(p_to));
+	const String old_paths[] = { get_import_write_path(p_from), p_from + ".import" };
+	for (const String &old_path : old_paths) {
+		if (FileAccess::exists(old_path) && !da->is_equivalent(ProjectSettings::get_singleton()->globalize_path(old_path), destination)) {
+			err = DirAccess::remove_absolute(old_path);
+			if (err != OK) {
+				return err;
+			}
+		}
+	}
+	return OK;
+}
+
 Error ResourceFormatImporter::_get_path_and_type(const String &p_path, PathAndType &r_path_and_type, bool p_load, bool *r_valid) const {
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) {
 		if (r_valid) {
@@ -83,7 +238,7 @@ Error ResourceFormatImporter::_get_path_and_type(const String &p_path, PathAndTy
 
 			return OK;
 		} else if (err != OK) {
-			ERR_PRINT(vformat("ResourceFormatImporter::load - %s.import:%d error: %s.", p_path, lines, error_text));
+			ERR_PRINT(vformat("ResourceFormatImporter::load - %s:%d error: %s.", get_import_path(p_path), lines, error_text));
 			return err;
 		}
 
@@ -245,11 +400,11 @@ void ResourceFormatImporter::get_recognized_extensions_for_type(const String &p_
 }
 
 bool ResourceFormatImporter::exists(const String &p_path) const {
-	return FileAccess::exists(p_path + ".import");
+	return FileAccess::exists(get_import_path(p_path));
 }
 
 bool ResourceFormatImporter::recognize_path(const String &p_path, const String &p_for_type) const {
-	return FileAccess::exists(p_path + ".import");
+	return FileAccess::exists(get_import_path(p_path));
 }
 
 Error ResourceFormatImporter::get_import_order_threads_and_importer(const String &p_path, int &r_order, bool &r_can_threads, String &r_importer) const {
@@ -259,7 +414,7 @@ Error ResourceFormatImporter::get_import_order_threads_and_importer(const String
 	r_can_threads = false;
 	Ref<ResourceImporter> importer;
 
-	if (FileAccess::exists(p_path + ".import")) {
+	if (FileAccess::exists(get_import_path(p_path))) {
 		PathAndType pat;
 		Error err = _get_path_and_type(p_path, pat, false);
 
@@ -283,7 +438,7 @@ Error ResourceFormatImporter::get_import_order_threads_and_importer(const String
 int ResourceFormatImporter::get_import_order(const String &p_path) const {
 	Ref<ResourceImporter> importer;
 
-	if (FileAccess::exists(p_path + ".import")) {
+	if (FileAccess::exists(get_import_path(p_path))) {
 		PathAndType pat;
 		Error err = _get_path_and_type(p_path, pat, false);
 
@@ -328,7 +483,7 @@ String ResourceFormatImporter::get_internal_resource_path(const String &p_path) 
 
 void ResourceFormatImporter::get_internal_resource_path_list(const String &p_path, List<String> *r_paths) {
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) {
 		return;
@@ -352,7 +507,7 @@ void ResourceFormatImporter::get_internal_resource_path_list(const String &p_pat
 		if (err == ERR_FILE_EOF) {
 			return;
 		} else if (err != OK) {
-			ERR_PRINT(vformat("ResourceFormatImporter::get_internal_resource_path_list - %s.import:%d error: %s.", p_path, lines, error_text));
+			ERR_PRINT(vformat("ResourceFormatImporter::get_internal_resource_path_list - %s:%d error: %s.", get_import_path(p_path), lines, error_text));
 			return;
 		}
 
@@ -602,12 +757,10 @@ void ResourceImporter::_bind_methods() {
 Error ResourceFormatImporterSaver::set_uid(const String &p_path, ResourceUID::ID p_uid) {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
-	Error err = cf->load(p_path + ".import");
+	Error err = cf->load(ResourceFormatImporter::get_import_path(p_path));
 	if (err != OK) {
 		return err;
 	}
 	cf->set_value("remap", "uid", ResourceUID::get_singleton()->id_to_text(p_uid));
-	cf->save(p_path + ".import");
-
-	return OK;
+	return ResourceFormatImporter::save_import_file(p_path, cf);
 }

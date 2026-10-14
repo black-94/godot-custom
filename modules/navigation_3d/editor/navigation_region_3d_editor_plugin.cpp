@@ -30,6 +30,7 @@
 
 #include "navigation_region_3d_editor_plugin.h"
 
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "editor/editor_node.h"
@@ -112,7 +113,7 @@ void NavigationRegion3DEditor::_bake_pressed() {
 						return;
 					}
 				} else {
-					if (FileAccess::exists(base + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 						err_dialog->set_text(TTR("Cannot generate navigation mesh because it belongs to a resource which was imported."));
 						err_dialog->popup_centered();
 						return;
@@ -120,7 +121,7 @@ void NavigationRegion3DEditor::_bake_pressed() {
 				}
 			}
 		} else {
-			if (FileAccess::exists(path + ".import")) {
+			if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 				err_dialog->set_text(TTR("Cannot generate navigation mesh because the resource was imported from another type."));
 				err_dialog->popup_centered();
 				return;

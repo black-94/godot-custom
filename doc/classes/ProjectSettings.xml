@@ -1230,6 +1230,12 @@
 		<member name="filesystem/import/fbx2gltf/enabled.web" type="bool" setter="" getter="" default="false">
 			Override for [member filesystem/import/fbx2gltf/enabled] on the Web where FBX2glTF can't easily be accessed from Godot.
 		</member>
+		<member name="filesystem/import/sidecar_root" type="String" setter="" getter="" default="&quot;&quot;">
+			Optional root directory for [code].import[/code] sidecar metadata. An empty value keeps metadata next to each source file. Accepts an absolute directory, a [code]res://[/code] directory, or a directory relative to the project root.
+			The source resource's project-relative path is mirrored under this directory. For example, [code]res://textures/icon.png[/code] uses [code]textures/icon.png.import[/code] under the configured root. Metadata in this root takes priority over an adjacent sidecar; if it is absent, the adjacent sidecar is read instead.
+			New and updated metadata is written to this root. After a successful write, any old adjacent sidecar is removed. Existing metadata is not moved until it is next written. Changing between two nonempty roots does not migrate metadata from the previous root; move that directory's contents yourself before changing this setting.
+			This does not change the imported resource data directory ([code].godot/imported[/code]). Exported packages keep canonical adjacent sidecar paths and clear this setting, so they do not depend on the development machine's directory. Restart the editor after changing this setting.
+		</member>
 		<member name="gui/common/default_scroll_deadzone" type="int" setter="" getter="" default="0">
 			Default value for [member ScrollContainer.scroll_deadzone], which will be used for all [ScrollContainer]s unless overridden.
 		</member>

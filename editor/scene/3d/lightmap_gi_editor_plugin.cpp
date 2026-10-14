@@ -30,6 +30,7 @@
 
 #include "lightmap_gi_editor_plugin.h"
 
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
@@ -62,13 +63,13 @@ void LightmapGIEditorPlugin::_bake_select_file(const String &p_file) {
 								err = LightmapGI::BAKE_ERROR_FOREIGN_DATA;
 							}
 						} else {
-							if (FileAccess::exists(base + ".import")) {
+							if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 								err = LightmapGI::BAKE_ERROR_FOREIGN_DATA;
 							}
 						}
 					}
 				} else {
-					if (FileAccess::exists(path + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 						err = LightmapGI::BAKE_ERROR_FOREIGN_DATA;
 					}
 				}

@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/input/input_map.h"
 #include "core/io/marshalls.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
@@ -3403,7 +3404,7 @@ void EditorPropertyResource::_resource_selected(const Ref<Resource> &p_resource,
 		if (p_inspect) {
 			if (extensions.find(parent.get_extension()) && (!EditorNode::get_singleton()->get_edited_scene() || EditorNode::get_singleton()->get_edited_scene()->get_scene_file_path() != parent)) {
 				// If the resource belongs to another (non-imported) scene, edit it in that scene instead.
-				if (!FileAccess::exists(parent + ".import")) {
+				if (!FileAccess::exists(ResourceFormatImporter::get_import_path(parent))) {
 					callable_mp(EditorNode::get_singleton(), &EditorNode::edit_foreign_resource).call_deferred(p_resource);
 					return;
 				}

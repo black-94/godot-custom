@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/error/error_macros.h"
 #include "core/input/input.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
@@ -1410,7 +1411,7 @@ void AnimationTimelineEdit::_anim_loop_pressed() {
 			base = animation->get_path().substr(0, srpos);
 		}
 
-		if (FileAccess::exists(base + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 			if (ResourceLoader::get_resource_type(base) == "PackedScene") {
 				EditorNode::get_singleton()->show_warning(TTR("Can't change loop mode on animation instanced from an imported scene.\n\nTo change this animation's loop mode, navigate to the scene's Advanced Import settings and select the animation.\nYou can then change the loop mode from the inspector menu."));
 			} else {
@@ -4815,7 +4816,7 @@ bool AnimationTrackEditor::is_global_library_read_only() const {
 		if (srpos != -1) {
 			base = base.substr(0, srpos);
 		}
-		if (FileAccess::exists(base + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 			return true;
 		}
 	}
@@ -5210,13 +5211,13 @@ void AnimationTrackEditor::_update_tracks() {
 					file_read_only = true;
 				}
 			} else {
-				if (FileAccess::exists(base + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(base))) {
 					file_read_only = true;
 				}
 			}
 		}
 	} else {
-		if (FileAccess::exists(animation->get_path() + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(animation->get_path()))) {
 			file_read_only = true;
 		}
 	}
