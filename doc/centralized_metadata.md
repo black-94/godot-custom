@@ -72,6 +72,20 @@ unlike Git, re-including an ignored parent first is not required.
 Ordinary `*` and `?` do not cross directory separators. Exclusions only control
 metadata placement; the resources themselves still import and export normally.
 
+## Editor artifacts
+
+Download editor binaries from the tag's GitHub Actions run, under **Artifacts**:
+
+- `linux-editor`: standard Linux x86_64 editor; no .NET SDK/runtime required.
+- `linux-editor-mono`: Linux editor with C# support; requires a compatible .NET
+  SDK (8.0 or later), even for projects that only use GDScript. Keep the bundled
+  `GodotSharp` directory beside the executable. This build has no startup option
+  to disable its .NET module.
+- `macos-editor`: standard universal editor for Intel and Apple Silicon.
+
+`*-template*` artifacts are game export runtimes, not project editors. For Linux
+GDScript-only projects, choose `linux-editor`, not a Mono or minimal template.
+
 ## Verification
 
 An editor build with `tests=yes` runs the C++ regression cases:
@@ -86,7 +100,10 @@ UI signal callbacks for file/directory duplicate, rename, move, and delete. It
 also covers disabled mode, unchanged-file migration, conflicting legacy files,
 filters, relative and absolute roots, reimport, and loading an exported PCK after
 the metadata directory has become unavailable. No display or export templates
-are required. The Linux export-test CI job runs this regression automatically.
+are required. Both standard and Mono Linux export-test CI jobs run this regression
+automatically. The standard editor additionally uses `--require-no-dotnet` to
+assert that C# classes and the GodotSharp singleton are absent, so a runner's
+preinstalled .NET SDK cannot conceal an accidentally published Mono build.
 
 For the requested remote Docker environment, mount the source working directory
 at `/home/master/workspace` in `agent-tool:latest`. A headless test build can use:

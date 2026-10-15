@@ -31,6 +31,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Editor (target=editor, module_mono_enabled=no)
+            cache-name: linux-editor
+            target: editor
+            scons-flags: module_mono_enabled=no
+            bin: ./bin/godot.linuxbsd.editor.x86_64
+            proj-export: true
+            metadata-test-flags: --require-no-dotnet
+            artifact: true
+
           - name: Editor w/ Mono (target=editor)
             cache-name: linux-editor-mono
             target: editor
@@ -283,7 +292,7 @@ jobs:
 
       - name: Test centralized resource metadata
         if: matrix.proj-export
-        run: python3 tests/integration/test_centralized_metadata.py "${{ matrix.bin }}"
+        run: python3 tests/integration/test_centralized_metadata.py "${{ matrix.bin }}" ${{ matrix.metadata-test-flags }}
 
       # Test the project converter
       - name: Test project converter

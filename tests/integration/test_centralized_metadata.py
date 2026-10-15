@@ -5,12 +5,12 @@ Usage: python3 tests/integration/test_centralized_metadata.py /path/to/godot
 No export templates or display server are required.
 """
 
+import argparse
 import json
 import pathlib
 import re
 import struct
 import subprocess
-import sys
 import tempfile
 import time
 import zlib
@@ -125,7 +125,13 @@ def check_export(binary, project, metadata, workspace, script_uid, texture_uid):
 
 
 def main():
-    binary = pathlib.Path(sys.argv[1]).resolve()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("binary", type=pathlib.Path)
+    parser.add_argument(
+        "--require-no-dotnet", action="store_true", help="Also verify the editor is built without the .NET module."
+    )
+    arguments = parser.parse_args()
+    binary = arguments.binary.resolve()
     with tempfile.TemporaryDirectory(prefix="godot-metadata-integration-") as temporary:
         workspace = pathlib.Path(temporary)
         project = workspace / "project"
@@ -141,6 +147,18 @@ def main():
 
         # A configured root alone must not change any original behavior.
         configure(project, "res://metadata visible", enabled=False)
+        if arguments.require_no_dotnet:
+            probe = project / "verify_no_dotnet.gd"
+            probe.write_text(
+                "extends SceneTree\nfunc _initialize():\n"
+                '\tif ClassDB.class_exists("CSharpScript") or Engine.has_singleton("GodotSharp"):\n'
+                '\t\tpush_error("Expected a standalone editor without the .NET module")\n'
+                "\t\tquit(1)\n\t\treturn\n"
+                '\tprint("NO_DOTNET_MODULE_OK")\n\tquit()\n',
+                encoding="utf-8",
+            )
+            assert "NO_DOTNET_MODULE_OK" in run(binary, project, "--script", "res://verify_no_dotnet.gd")
+            probe.unlink()
         run(binary, project, "--editor", "--import")
         assert legacy.exists() and (project / "scripts/player.gd.uid").exists()
         assert (project / "scripts/basic.gdshader.uid").exists()
