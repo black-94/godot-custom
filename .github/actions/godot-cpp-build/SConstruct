@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+
+import sys
+
+from SCons.Script import ARGUMENTS, Environment, Export, SConscript
+
+# Export the environment before godot-cpp creates its static library builder.
+env = Environment(tools=["default"], PLATFORM="")
+if ARGUMENTS.get("platform", sys.platform).startswith("linux"):
+    # GNU ar accepts response files. Keep sh -c below Linux's per-argument limit.
+    env["ARCOM"] = "${TEMPFILE('$AR $ARFLAGS $TARGET $SOURCES', '$ARCOMSTR')}"
+    env["MAXLINELENGTH"] = 32768
+
+Export("env")
+SConscript("#SConstruct")
