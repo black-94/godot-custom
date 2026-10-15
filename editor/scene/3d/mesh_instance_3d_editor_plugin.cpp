@@ -30,6 +30,7 @@
 
 #include "mesh_instance_3d_editor_plugin.h"
 
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "editor/editor_node.h"
@@ -483,14 +484,14 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 						return;
 					}
 				} else {
-					if (FileAccess::exists(path + ".import")) {
+					if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 						err_dialog->set_text(TTR("Mesh cannot unwrap UVs because it belongs to another resource which was imported from another file type. Make it unique first."));
 						err_dialog->popup_centered();
 						return;
 					}
 				}
 			} else {
-				if (FileAccess::exists(path + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 					err_dialog->set_text(TTR("Mesh cannot unwrap UVs because it was imported from another file type. Make it unique first."));
 					err_dialog->popup_centered();
 					return;

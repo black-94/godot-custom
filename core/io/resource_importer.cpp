@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/io/config_file.h"
 #include "core/io/image.h"
+#include "core/io/resource_metadata.h"
 #include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/variant/variant_parser.h"
@@ -41,9 +42,46 @@ bool ResourceFormatImporter::SortImporterByName::operator()(const Ref<ResourceIm
 	return p_a->get_importer_name() < p_b->get_importer_name();
 }
 
+String ResourceFormatImporter::get_import_path(const String &p_path) {
+	return ResourceMetadata::get_read_path(p_path, ".import");
+}
+
+String ResourceFormatImporter::get_import_write_path(const String &p_path) {
+	return ResourceMetadata::get_write_path(p_path, ".import");
+}
+
+Ref<FileAccess> ResourceFormatImporter::open_import_file(const String &p_path, Error *r_error) {
+	return ResourceMetadata::open_file(p_path, ".import", r_error);
+}
+
+Error ResourceFormatImporter::commit_import_file(const String &p_path, const Ref<FileAccess> &p_file) {
+	return ResourceMetadata::commit_file(p_path, ".import", p_file);
+}
+
+Error ResourceFormatImporter::save_import_file(const String &p_path, const Ref<ConfigFile> &p_config) {
+	if (!ResourceMetadata::is_enabled()) {
+		return p_config->save(p_path + ".import");
+	}
+	Error err;
+	Ref<FileAccess> file = open_import_file(p_path, &err);
+	if (file.is_null()) {
+		return err;
+	}
+	ERR_FAIL_COND_V(!file->store_string(p_config->encode_to_text()), ERR_FILE_CANT_WRITE);
+	return commit_import_file(p_path, file);
+}
+
+Error ResourceFormatImporter::remove_import_file(const String &p_path) {
+	return ResourceMetadata::remove_file(p_path, ".import");
+}
+
+Error ResourceFormatImporter::move_import_file(const String &p_from, const String &p_to) {
+	return ResourceMetadata::move_file(p_from, p_to, ".import");
+}
+
 Error ResourceFormatImporter::_get_path_and_type(const String &p_path, PathAndType &r_path_and_type, bool p_load, bool *r_valid) const {
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) {
 		if (r_valid) {
@@ -245,11 +283,11 @@ void ResourceFormatImporter::get_recognized_extensions_for_type(const String &p_
 }
 
 bool ResourceFormatImporter::exists(const String &p_path) const {
-	return FileAccess::exists(p_path + ".import");
+	return FileAccess::exists(get_import_path(p_path));
 }
 
 bool ResourceFormatImporter::recognize_path(const String &p_path, const String &p_for_type) const {
-	return FileAccess::exists(p_path + ".import");
+	return FileAccess::exists(get_import_path(p_path));
 }
 
 Error ResourceFormatImporter::get_import_order_threads_and_importer(const String &p_path, int &r_order, bool &r_can_threads, String &r_importer) const {
@@ -259,7 +297,7 @@ Error ResourceFormatImporter::get_import_order_threads_and_importer(const String
 	r_can_threads = false;
 	Ref<ResourceImporter> importer;
 
-	if (FileAccess::exists(p_path + ".import")) {
+	if (FileAccess::exists(get_import_path(p_path))) {
 		PathAndType pat;
 		Error err = _get_path_and_type(p_path, pat, false);
 
@@ -283,7 +321,7 @@ Error ResourceFormatImporter::get_import_order_threads_and_importer(const String
 int ResourceFormatImporter::get_import_order(const String &p_path) const {
 	Ref<ResourceImporter> importer;
 
-	if (FileAccess::exists(p_path + ".import")) {
+	if (FileAccess::exists(get_import_path(p_path))) {
 		PathAndType pat;
 		Error err = _get_path_and_type(p_path, pat, false);
 
@@ -328,7 +366,7 @@ String ResourceFormatImporter::get_internal_resource_path(const String &p_path) 
 
 void ResourceFormatImporter::get_internal_resource_path_list(const String &p_path, List<String> *r_paths) {
 	Error err;
-	Ref<FileAccess> f = FileAccess::open(p_path + ".import", FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(get_import_path(p_path), FileAccess::READ, &err);
 
 	if (f.is_null()) {
 		return;
@@ -602,11 +640,14 @@ void ResourceImporter::_bind_methods() {
 Error ResourceFormatImporterSaver::set_uid(const String &p_path, ResourceUID::ID p_uid) {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
-	Error err = cf->load(p_path + ".import");
+	Error err = cf->load(ResourceFormatImporter::get_import_path(p_path));
 	if (err != OK) {
 		return err;
 	}
 	cf->set_value("remap", "uid", ResourceUID::get_singleton()->id_to_text(p_uid));
+	if (ResourceMetadata::is_enabled()) {
+		return ResourceFormatImporter::save_import_file(p_path, cf);
+	}
 	cf->save(p_path + ".import");
 
 	return OK;

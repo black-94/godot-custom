@@ -33,6 +33,7 @@
 #include "core/io/resource_loader.h"
 #include "core/io/resource_saver.h"
 
+class ConfigFile;
 class ResourceImporter;
 class ResourceFormatImporter;
 
@@ -63,6 +64,16 @@ class ResourceFormatImporter : public ResourceFormatLoader {
 
 public:
 	static ResourceFormatImporter *get_singleton() { return singleton; }
+
+	// Resolve sidecar metadata separately from the imported resource data.
+	static String get_import_path(const String &p_path);
+	static String get_import_write_path(const String &p_path);
+	static Ref<FileAccess> open_import_file(const String &p_path, Error *r_error = nullptr);
+	static Error commit_import_file(const String &p_path, const Ref<FileAccess> &p_file);
+	static Error save_import_file(const String &p_path, const Ref<ConfigFile> &p_config);
+	static Error remove_import_file(const String &p_path);
+	static Error move_import_file(const String &p_from, const String &p_to);
+
 	virtual Ref<Resource> load(const String &p_path, const String &p_original_path = "", Error *r_error = nullptr, bool p_use_sub_threads = false, float *r_progress = nullptr, CacheMode p_cache_mode = CACHE_MODE_REUSE) override;
 	Ref<Resource> load_internal(const String &p_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode, bool p_silence_errors);
 	virtual void get_recognized_extensions(List<String> *p_extensions) const override;

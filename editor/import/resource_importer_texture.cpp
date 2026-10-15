@@ -33,6 +33,8 @@
 #include "core/config/project_settings.h"
 #include "core/io/config_file.h"
 #include "core/io/image_loader.h"
+#include "core/io/resource_importer.h"
+#include "core/io/resource_metadata.h"
 #include "editor/file_system/editor_file_system.h"
 #include "editor/import/resource_importer_texture_settings.h"
 #include "editor/settings/editor_settings.h"
@@ -96,7 +98,7 @@ void ResourceImporterTexture::update_imports() {
 	for (const KeyValue<StringName, MakeInfo> &E : make_flags) {
 		Ref<ConfigFile> cf;
 		cf.instantiate();
-		String src_path = String(E.key) + ".import";
+		String src_path = ResourceFormatImporter::get_import_path(String(E.key));
 
 		Error err = cf->load(src_path);
 		ERR_CONTINUE(err != OK);
@@ -147,7 +149,8 @@ void ResourceImporterTexture::update_imports() {
 		}
 
 		if (changed) {
-			cf->save(src_path);
+			Error save_err = ResourceFormatImporter::save_import_file(String(E.key), cf);
+			ERR_CONTINUE(save_err != OK && ResourceMetadata::is_enabled());
 			to_reimport.push_back(E.key);
 		}
 	}

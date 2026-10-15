@@ -36,6 +36,7 @@
 #include "core/io/file_access.h"
 #include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
+#include "core/io/resource_metadata.h"
 #include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
@@ -1279,7 +1280,7 @@ void FileSystemDock::_update_file_list(bool p_keep_selection, const Vector<Strin
 HashSet<String> FileSystemDock::_get_valid_conversions_for_file_paths(const Vector<String> &p_paths) {
 	HashSet<String> all_valid_conversion_to_targets;
 	for (const String &fpath : p_paths) {
-		if (fpath.is_empty() || fpath == "res://" || !FileAccess::exists(fpath) || FileAccess::exists(fpath + ".import")) {
+		if (fpath.is_empty() || fpath == "res://" || !FileAccess::exists(fpath) || FileAccess::exists(ResourceFormatImporter::get_import_path(fpath))) {
 			return HashSet<String>();
 		}
 
@@ -1322,10 +1323,10 @@ void FileSystemDock::_select_file(const String &p_path, bool p_select_in_favorit
 	if (fpath.ends_with("/")) {
 		// Ignore a directory.
 	} else if (fpath != "Favorites") {
-		if (FileAccess::exists(fpath + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(fpath))) {
 			Ref<ConfigFile> config;
 			config.instantiate();
-			Error err = config->load(fpath + ".import");
+			Error err = config->load(ResourceFormatImporter::get_import_path(fpath));
 			if (err == OK) {
 				if (config->has_section_key("remap", "importer")) {
 					String importer = config->get_value("remap", "importer");
@@ -1561,15 +1562,52 @@ void FileSystemDock::_try_move_item(const FileOrFolder &p_item, const String &p_
 	print_verbose("Moving " + old_path + " -> " + new_path);
 	Error err = da->rename(old_path, new_path);
 	if (err == OK) {
-		// Move/Rename any corresponding import settings too.
-		if (p_item.is_file && FileAccess::exists(old_path + ".import")) {
-			err = da->rename(old_path + ".import", new_path + ".import");
-			if (err != OK) {
-				EditorNode::get_singleton()->add_io_error(TTR("Error moving:") + "\n" + old_path + ".import\n");
+		if (ResourceMetadata::is_enabled()) {
+			// Mirror every resource in a moved directory, including excluded
+			// sidecars carried along by the directory rename itself.
+			Vector<String> moved_metadata_files;
+			Vector<String> moved_metadata_suffixes;
+			for (const String &file_path : file_changed_paths) {
+				const String new_file_path = p_item.is_file ? new_path : file_path.replace_first(old_path, new_path);
+				for (const String &suffix : { String(".import"), String(".uid") }) {
+					if (!FileAccess::exists(ResourceMetadata::get_read_path(file_path, suffix)) && !FileAccess::exists(new_file_path + suffix)) {
+						continue;
+					}
+					err = ResourceMetadata::move_file(file_path, new_file_path, suffix);
+					if (err != OK) {
+						EditorNode::get_singleton()->add_io_error(TTR("Error moving resource metadata:") + "\n" + file_path + suffix + "\n");
+						// Do not leave the resource at a new path with its only
+						// UID/import options stranded at the previous path.
+						const Error rollback_err = da->rename(new_path, old_path);
+						if (rollback_err == OK) {
+							for (int i = moved_metadata_files.size() - 1; i >= 0; i--) {
+								const String &rollback_file = moved_metadata_files[i];
+								const String moved_file = p_item.is_file ? new_path : rollback_file.replace_first(old_path, new_path);
+								const Error metadata_err = ResourceMetadata::move_file(moved_file, rollback_file, moved_metadata_suffixes[i]);
+								if (metadata_err != OK) {
+									EditorNode::get_singleton()->add_io_error(TTR("Error restoring resource metadata:") + "\n" + rollback_file + moved_metadata_suffixes[i] + "\n");
+								}
+							}
+						} else {
+							EditorNode::get_singleton()->add_io_error(TTR("Error restoring resource path:") + "\n" + old_path + "\n");
+						}
+						return;
+					}
+					moved_metadata_files.push_back(file_path);
+					moved_metadata_suffixes.push_back(suffix);
+				}
+			}
+		} else {
+			// Move/Rename any corresponding import settings too.
+			if (p_item.is_file && FileAccess::exists(old_path + ".import")) {
+				err = da->rename(old_path + ".import", new_path + ".import");
+				if (err != OK) {
+					EditorNode::get_singleton()->add_io_error(TTR("Error moving:") + "\n" + old_path + ".import\n");
+				}
 			}
 		}
 
-		if (p_item.is_file && FileAccess::exists(old_path + ".uid")) {
+		if (!ResourceMetadata::is_enabled() && p_item.is_file && FileAccess::exists(old_path + ".uid")) {
 			err = da->rename(old_path + ".uid", new_path + ".uid");
 			if (err != OK) {
 				EditorNode::get_singleton()->add_io_error(TTR("Error moving:") + "\n" + old_path + ".uid\n");
@@ -4011,7 +4049,7 @@ void FileSystemDock::_file_list_gui_input(Ref<InputEvent> p_event) {
 
 bool FileSystemDock::_get_imported_files(const String &p_path, String &r_extension, Vector<String> &r_files) const {
 	if (!p_path.ends_with("/")) {
-		if (FileAccess::exists(p_path + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_path))) {
 			if (r_extension.is_empty()) {
 				r_extension = p_path.get_extension();
 			} else if (r_extension != p_path.get_extension()) {
@@ -4085,7 +4123,7 @@ void FileSystemDock::_update_import_dock() {
 		const String &fpath = efiles[i];
 		Ref<ConfigFile> cf;
 		cf.instantiate();
-		Error err = cf->load(fpath + ".import");
+		Error err = cf->load(ResourceFormatImporter::get_import_path(fpath));
 		if (err != OK) {
 			imports.clear();
 			break;

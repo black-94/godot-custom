@@ -36,6 +36,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_importer.h"
+#include "core/io/resource_metadata.h"
 #include "core/object/callable_mp.h"
 #include "core/object/class_db.h"
 #include "core/object/message_queue.h"
@@ -120,7 +121,7 @@ ResourceUID::ID ResourceFormatLoader::get_resource_uid(const String &p_path) con
 	if (has_custom_uid_support()) {
 		GDVIRTUAL_CALL(_get_resource_uid, p_path, uid);
 	} else {
-		Ref<FileAccess> file = FileAccess::open(p_path + ".uid", FileAccess::READ);
+		Ref<FileAccess> file = FileAccess::open(ResourceMetadata::get_read_path(p_path, ".uid"), FileAccess::READ);
 		if (file.is_valid()) {
 			uid = ResourceUID::get_singleton()->text_to_id(file->get_line());
 		}
@@ -1427,7 +1428,7 @@ ResourceUID::ID ResourceLoader::get_resource_uid(const String &p_path) {
 
 bool ResourceLoader::should_create_uid_file(const String &p_path) {
 	const String local_path = _validate_local_path(p_path);
-	if (FileAccess::exists(local_path + ".uid")) {
+	if (FileAccess::exists(ResourceMetadata::get_read_path(local_path, ".uid"))) {
 		return false;
 	}
 
@@ -1478,7 +1479,7 @@ String ResourceLoader::_path_remap(const String &p_path, bool *r_translation_rem
 		}
 
 		// Fallback to p_path if new_path does not exist.
-		if (!FileAccess::exists(new_path + ".import") &&
+		if (!FileAccess::exists(ResourceFormatImporter::get_import_path(new_path)) &&
 				!FileAccess::exists(new_path + ".remap") &&
 				!FileAccess::exists(new_path)) {
 			WARN_PRINT(vformat("Translation remap '%s' does not exist. Falling back to '%s'.", new_path, p_path));

@@ -30,7 +30,9 @@
 
 #include "gpu_particles_collision_sdf_editor_plugin.h"
 
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
+#include "core/io/resource_metadata.h"
 #include "core/object/callable_mp.h"
 #include "editor/editor_interface.h"
 #include "editor/editor_node.h"
@@ -152,8 +154,8 @@ void GPUParticlesCollisionSDF3DEditorPlugin::_sdf_save_path_and_bake(const Strin
 		Ref<ConfigFile> config;
 
 		config.instantiate();
-		if (FileAccess::exists(p_path + ".import")) {
-			config->load(p_path + ".import");
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(p_path))) {
+			config->load(ResourceFormatImporter::get_import_path(p_path));
 		}
 
 		config->set_value("remap", "importer", "3d_texture");
@@ -166,7 +168,8 @@ void GPUParticlesCollisionSDF3DEditorPlugin::_sdf_save_path_and_bake(const Strin
 		config->set_value("params", "slices/horizontal", 1);
 		config->set_value("params", "slices/vertical", bake_img->get_meta("depth"));
 
-		config->save(p_path + ".import");
+		Error save_err = ResourceFormatImporter::save_import_file(p_path, config);
+		ERR_FAIL_COND_MSG(save_err != OK && ResourceMetadata::is_enabled(), "Cannot save particle collision import metadata.");
 
 		Error err = bake_img->save_exr(p_path, false);
 		ERR_FAIL_COND(err);

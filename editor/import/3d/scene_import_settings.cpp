@@ -784,7 +784,7 @@ void SceneImportSettingsDialog::open_settings(const String &p_path, const String
 
 		Ref<ConfigFile> config;
 		config.instantiate();
-		Error err = config->load(p_path + ".import");
+		Error err = config->load(ResourceFormatImporter::get_import_path(p_path));
 		if (err == OK) {
 			Vector<String> keys = config->get_section_keys("params");
 			for (const String &E : keys) {

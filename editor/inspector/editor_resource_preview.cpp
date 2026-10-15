@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/file_access.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
@@ -154,7 +155,7 @@ void EditorResourcePreview::_preview_ready(const String &p_path, int p_hash, con
 
 		if (!p_path.begins_with("ID:")) {
 			modified_time = FileAccess::get_modified_time(p_path);
-			String import_path = p_path + ".import";
+			String import_path = ResourceFormatImporter::get_import_path(p_path);
 			if (FileAccess::exists(import_path)) {
 				modified_time = MAX(modified_time, FileAccess::get_modified_time(import_path));
 			}
@@ -265,7 +266,7 @@ void EditorResourcePreview::_generate_preview(Ref<ImageTexture> &r_texture, Ref<
 			ERR_FAIL_COND_MSG(f.is_null(), "Cannot create file '" + cache_base + ".txt'. Check user write permissions.");
 
 			uint64_t modtime = FileAccess::get_modified_time(p_item.path);
-			String import_path = p_item.path + ".import";
+			String import_path = ResourceFormatImporter::get_import_path(p_item.path);
 			if (FileAccess::exists(import_path)) {
 				modtime = MAX(modtime, FileAccess::get_modified_time(import_path));
 			}
@@ -331,7 +332,7 @@ void EditorResourcePreview::_iterate() {
 		_generate_preview(texture, small_texture, item, cache_base, preview_metadata);
 	} else {
 		uint64_t modtime = FileAccess::get_modified_time(item.path);
-		String import_path = item.path + ".import";
+		String import_path = ResourceFormatImporter::get_import_path(item.path);
 		if (FileAccess::exists(import_path)) {
 			modtime = MAX(modtime, FileAccess::get_modified_time(import_path));
 		}
@@ -565,7 +566,7 @@ void EditorResourcePreview::check_for_invalidation(const String &p_path) {
 
 		if (cache.has(p_path)) {
 			uint64_t modified_time = FileAccess::get_modified_time(p_path);
-			String import_path = p_path + ".import";
+			String import_path = ResourceFormatImporter::get_import_path(p_path);
 			if (FileAccess::exists(import_path)) {
 				modified_time = MAX(modified_time, FileAccess::get_modified_time(import_path));
 			}

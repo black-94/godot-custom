@@ -31,6 +31,8 @@
 #include "resource_importer_bmfont.h"
 
 #include "core/io/config_file.h"
+#include "core/io/resource_importer.h"
+#include "core/io/resource_metadata.h"
 #include "core/io/resource_saver.h"
 #include "scene/resources/font.h"
 #include "servers/text/text_server.h"
@@ -87,12 +89,13 @@ Error ResourceImporterBMFont::import(ResourceUID::ID p_source_id, const String &
 		Ref<ConfigFile> config;
 		config.instantiate();
 
-		err = config->load(file + ".import");
+		err = config->load(ResourceFormatImporter::get_import_path(file));
 		if (err == OK) {
 			config->clear();
 			config->set_value("remap", "importer", "skip");
 
-			config->save(file + ".import");
+			const Error save_err = ResourceFormatImporter::save_import_file(file, config);
+			ERR_FAIL_COND_V(save_err != OK && ResourceMetadata::is_enabled(), save_err);
 		}
 	}
 

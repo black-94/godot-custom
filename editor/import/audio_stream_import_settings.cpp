@@ -30,6 +30,7 @@
 
 #include "audio_stream_import_settings.h"
 
+#include "core/io/resource_importer.h"
 #include "core/object/callable_mp.h"
 #include "editor/audio/audio_stream_preview.h"
 #include "editor/editor_string_names.h"
@@ -468,7 +469,7 @@ void AudioStreamImportSettingsDialog::edit(const String &p_path, const String &p
 	if (stream.is_valid()) {
 		Ref<ConfigFile> config_file;
 		config_file.instantiate();
-		Error err = config_file->load(p_path + ".import");
+		Error err = config_file->load(ResourceFormatImporter::get_import_path(p_path));
 		updating_settings = true;
 		if (err == OK) {
 			double bpm = config_file->get_value("params", "bpm", 0);

@@ -33,7 +33,9 @@
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/io/config_file.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
+#include "core/io/resource_metadata.h"
 #include "core/io/resource_saver.h"
 #include "core/math/delaunay_3d.h"
 #include "core/math/geometry_3d.h"
@@ -859,7 +861,7 @@ LightmapGI::BakeError LightmapGI::_save_and_reimport_atlas_textures(const Ref<Li
 		}
 
 		const String atlas_path = (texture_count > 1 ? p_base_name + "_" + itos(i) : p_base_name) + (p_is_shadowmask ? ".png" : ".exr");
-		const String config_path = atlas_path + ".import";
+		const String config_path = ResourceFormatImporter::get_import_path(atlas_path);
 
 		Ref<ConfigFile> config;
 		config.instantiate();
@@ -880,7 +882,8 @@ LightmapGI::BakeError LightmapGI::_save_and_reimport_atlas_textures(const Ref<Li
 		config->set_value("params", "slices/horizontal", 1);
 		config->set_value("params", "slices/vertical", texture_slice_count);
 
-		config->save(config_path);
+		Error config_err = ResourceFormatImporter::save_import_file(atlas_path, config);
+		ERR_FAIL_COND_V(config_err != OK && ResourceMetadata::is_enabled(), LightmapGI::BAKE_ERROR_CANT_CREATE_IMAGE);
 
 		if (supersampling_enabled) {
 			texture_image->resize(texture_image->get_width() / supersampling_factor, texture_image->get_height() / supersampling_factor, Image::INTERPOLATE_TRILINEAR);

@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
@@ -44,7 +45,6 @@
 #include "scene/gui/dialogs.h"
 
 void ProjectUpgradeTool::_add_files(EditorFileSystemDirectory *p_dir, Vector<String> &r_reimport_paths, Vector<String> &r_resave_scenes, Vector<String> &r_resave_resources) {
-	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_RESOURCES);
 	for (int i = 0; i < p_dir->get_file_count(); i++) {
 		const String path = p_dir->get_file_path(i);
 		const String ext = path.get_extension();
@@ -52,7 +52,7 @@ void ProjectUpgradeTool::_add_files(EditorFileSystemDirectory *p_dir, Vector<Str
 			r_resave_scenes.append(path);
 		} else if (ext == "tres" || ext == "res") {
 			r_resave_resources.append(path);
-		} else if (da->file_exists(path + ".import")) {
+		} else if (FileAccess::exists(ResourceFormatImporter::get_import_path(path))) {
 			r_reimport_paths.append(path);
 		}
 	}

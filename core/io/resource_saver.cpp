@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
+#include "core/io/resource_metadata.h"
 #include "core/object/class_db.h"
 #include "core/object/script_language.h"
 
@@ -158,6 +159,14 @@ Error ResourceSaver::set_uid(const String &p_path, ResourceUID::ID p_uid) {
 	String path = p_path;
 
 	ERR_FAIL_COND_V_MSG(path.is_empty(), ERR_INVALID_PARAMETER, "Can't update UID to empty path. Provide non-empty path.");
+
+	if (ResourceMetadata::is_enabled() && FileAccess::exists(ResourceMetadata::get_read_path(path, ".uid"))) {
+		Error err;
+		Ref<FileAccess> file = ResourceMetadata::open_file(path, ".uid", &err);
+		ERR_FAIL_COND_V(file.is_null(), err);
+		ERR_FAIL_COND_V(!file->store_line(ResourceUID::get_singleton()->id_to_text(p_uid)), ERR_FILE_CANT_WRITE);
+		return ResourceMetadata::commit_file(path, ".uid", file);
+	}
 
 	Error err = ERR_FILE_UNRECOGNIZED;
 

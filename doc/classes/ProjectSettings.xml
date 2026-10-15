@@ -1230,6 +1230,21 @@
 		<member name="filesystem/import/fbx2gltf/enabled.web" type="bool" setter="" getter="" default="false">
 			Override for [member filesystem/import/fbx2gltf/enabled] on the Web where FBX2glTF can't easily be accessed from Godot.
 		</member>
+		<member name="filesystem/metadata/enabled" type="bool" setter="" getter="" default="false">
+			Enables centralized [code].uid[/code] and [code].import[/code] resource sidecars. When disabled, all sidecars use the original adjacent locations and the root and filters are ignored. Restart the editor after changing metadata settings.
+			When enabled, reads prefer [member filesystem/metadata/root_directory] and fall back to adjacent sidecars. Writes use the configured root and remove the adjacent copy only after a successful write. Existing sidecars are migrated during the editor's filesystem scan without changing their contents or resource identities. A failed migration retains the previous copy and reports an error.
+			Imported data, caches in [code].godot[/code], and resource-embedded UIDs are not relocated. Exported packages use standard paths and disable this setting, including feature overrides, so they remain independent of the development machine.
+		</member>
+		<member name="filesystem/metadata/exclude_patterns" type="PackedStringArray" setter="" getter="" default="PackedStringArray()">
+			Ordered, case-sensitive gitignore-style rules for sidecars that should remain adjacent. Rules match project-relative resource paths or sidecar paths. A matching rule excludes migration; a later [code]![/code] rule includes it again. Unlike Git, parent directories need not be explicitly re-included: the last matching rule wins.
+			Supports [code]*[/code], [code]?[/code], character classes such as [code][a-z][/code], recursive [code]**[/code], leading [code]/[/code] for project-root anchoring, trailing [code]/[/code] for directories, [code]#[/code] comments, and backslash-escaped literal characters. Unanchored patterns without a slash match names at any depth. Each entry can also contain newline-separated rules.
+			For example, [code]vendor/[/code] keeps all sidecars below any vendor directory adjacent; [code]/icon.svg[/code] excludes only the project-root icon; [code]*.uid[/code] excludes UID sidecars; [code]!scripts/**[/code] re-includes scripts. Excluded source resources are still imported and exported normally.
+		</member>
+		<member name="filesystem/metadata/root_directory" type="String" setter="" getter="" default="&quot;res://.metadata&quot;">
+			Root directory for centralized resource sidecars when [member filesystem/metadata/enabled] is enabled. Accepts [code]res://[/code] paths, paths relative to the project root, and absolute filesystem paths (including directories outside the project). An empty root leaves sidecars adjacent. [code]user://[/code] roots are not supported.
+			Preserves the original relative layout: [code]res://scripts/player.gd.uid[/code] becomes [code]&lt;root&gt;/scripts/player.gd.uid[/code], and [code]res://textures/icon.png.import[/code] becomes [code]&lt;root&gt;/textures/icon.png.import[/code]. A root inside the project is excluded from filesystem scanning and resource export.
+			Before changing roots, disabling centralization, or excluding already centralized resources, move the affected metadata to the new root or back next to its sources. Only the configured root and the original adjacent locations are searched; metadata in previous roots is never silently deleted.
+		</member>
 		<member name="gui/common/default_scroll_deadzone" type="int" setter="" getter="" default="0">
 			Default value for [member ScrollContainer.scroll_deadzone], which will be used for all [ScrollContainer]s unless overridden.
 		</member>

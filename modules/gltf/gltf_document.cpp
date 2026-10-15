@@ -44,6 +44,7 @@
 #include "core/io/file_access.h"
 #include "core/io/file_access_memory.h"
 #include "core/io/json.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/io/stream_peer.h"
 #include "core/object/class_db.h"
@@ -2220,10 +2221,10 @@ void GLTFDocument::_parse_image_save_image(Ref<GLTFState> p_state, const Vector<
 				// Texture data has to be written to the res:// folder and imported.
 				file_path = p_state->get_extract_path().path_join(p_state->get_extract_prefix() + "_" + p_image->get_name());
 				file_path += p_file_extension.is_empty() ? ".png" : p_file_extension;
-				if (FileAccess::exists(file_path + ".import")) {
+				if (FileAccess::exists(ResourceFormatImporter::get_import_path(file_path))) {
 					Ref<ConfigFile> config;
 					config.instantiate();
-					config->load(file_path + ".import");
+					config->load(ResourceFormatImporter::get_import_path(file_path));
 					if (config->has_section_key("remap", "generator_parameters")) {
 						generator_parameters = (Dictionary)config->get_value("remap", "generator_parameters");
 					}

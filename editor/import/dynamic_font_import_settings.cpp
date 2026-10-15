@@ -31,6 +31,7 @@
 #include "dynamic_font_import_settings.h"
 
 #include "core/config/project_settings.h"
+#include "core/io/resource_importer.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_mp.h"
 #include "core/os/os.h"
@@ -871,7 +872,7 @@ void DynamicFontImportSettingsDialog::open_settings(const String &p_path) {
 	config.instantiate();
 	ERR_FAIL_COND(config.is_null());
 
-	Error err = config->load(p_path + ".import");
+	Error err = config->load(ResourceFormatImporter::get_import_path(p_path));
 	print_verbose("Loading import settings:");
 	if (err == OK) {
 		Vector<String> keys = config->get_section_keys("params");

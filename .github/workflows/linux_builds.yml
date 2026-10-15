@@ -281,6 +281,10 @@ jobs:
         with:
           bin: ${{ matrix.bin }}
 
+      - name: Test centralized resource metadata
+        if: matrix.proj-export
+        run: python3 tests/integration/test_centralized_metadata.py "${{ matrix.bin }}"
+
       # Test the project converter
       - name: Test project converter
         uses: ./.github/actions/godot-converter-test

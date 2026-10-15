@@ -30,6 +30,7 @@
 
 #include "editor_file_server.h"
 
+#include "core/io/resource_importer.h"
 #include "editor/editor_node.h"
 #include "editor/export/editor_export_platform.h"
 #include "editor/settings/editor_settings.h"
@@ -52,16 +53,16 @@ static void _add_file(String f, const uint64_t &p_modified_time, HashMap<String,
 void EditorFileServer::_scan_files_changed(EditorFileSystemDirectory *efd, const Vector<String> &p_tags, HashMap<String, uint64_t> &files_to_send, HashMap<String, uint64_t> &cached_files) {
 	for (int i = 0; i < efd->get_file_count(); i++) {
 		String f = efd->get_file_path(i);
-		if (FileAccess::exists(f + ".import")) {
+		if (FileAccess::exists(ResourceFormatImporter::get_import_path(f))) {
 			// is imported, determine what to do
 			// Todo the modified times of remapped files should most likely be kept in EditorFileSystem to speed this up in the future.
 			Ref<ConfigFile> cf;
 			cf.instantiate();
-			Error err = cf->load(f + ".import");
+			Error err = cf->load(ResourceFormatImporter::get_import_path(f));
 
 			ERR_CONTINUE(err != OK);
 			{
-				uint64_t mt = FileAccess::get_modified_time(f + ".import");
+				uint64_t mt = FileAccess::get_modified_time(ResourceFormatImporter::get_import_path(f));
 				_add_file(f + ".import", mt, files_to_send, cached_files);
 			}
 
@@ -231,11 +232,16 @@ void EditorFileServer::poll() {
 		pr.step(TTR("Sending file:") + " " + K.key.get_file(), 5 + idx * 100 / files_to_send.size(), false);
 		idx++;
 
-		if (K.value == 0 || !FileAccess::exists("res://" + K.key)) { // File was removed
+		String source_path = "res://" + K.key;
+		if (source_path.ends_with(".import")) {
+			// Keep canonical client paths while reading from the configured local root.
+			source_path = ResourceFormatImporter::get_import_path(source_path.trim_suffix(".import"));
+		}
+		if (K.value == 0 || !FileAccess::exists(source_path)) { // File was removed
 			continue;
 		}
 
-		Vector<uint8_t> array = FileAccess::_get_file_as_bytes("res://" + K.key);
+		Vector<uint8_t> array = FileAccess::_get_file_as_bytes(source_path);
 		tcp_peer->put_64(array.size());
 		tcp_peer->put_data(array.ptr(), array.size());
 		ERR_FAIL_COND(tcp_peer->get_status() != StreamPeerTCP::STATUS_CONNECTED);
