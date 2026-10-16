@@ -54,3 +54,66 @@ jobs:
     needs: static-checks
     if: needs.static-checks.outputs.sources-changed == 'true' || github.event_name != 'pull_request'
     uses: ./.github/workflows/web_builds.yml
+
+  # Third stage: Publish successful tag builds as GitHub Release assets.
+
+  publish-release:
+    name: 📦 Publish Release
+    needs: [android-build, ios-build, linux-build, macos-build, windows-build, web-build]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download artifact archives
+        shell: bash
+        run: |
+          # Keep the original ZIPs, with one release asset per build artifact.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+            --paginate --jq '.artifacts[] | [.id, .name, .expired] | @tsv' > "$RUNNER_TEMP/artifacts.tsv"
+          if [ ! -s "$RUNNER_TEMP/artifacts.tsv" ]; then
+            echo "::error::No build artifacts found for this run."
+            exit 1
+          fi
+
+          mkdir -p release-assets
+          while IFS=$'\t' read -r artifact_id artifact_name expired; do
+            if [ "$expired" != "false" ] || [[ ! "$artifact_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+              echo "::error::Expired artifact or invalid artifact name: $artifact_name"
+              exit 1
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+              > "release-assets/$artifact_name.zip"
+          done < "$RUNNER_TEMP/artifacts.tsv"
+
+      - name: Verify archives and generate checksums
+        shell: bash
+        run: |
+          for archive in release-assets/*.zip; do
+            unzip -tq "$archive"
+          done
+          cd release-assets
+          shasum -a 256 -- *.zip > SHA256SUMS.txt
+
+      - name: Publish release
+        shell: bash
+        run: |
+          # New releases stay private drafts until every asset is uploaded.
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --draft --title "$RELEASE_TAG" \
+              --notes "Build artifacts from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.
+
+          Editor packages without .NET: linux-editor, windows-editor, macos-editor, and android-editor (including Horizon OS/PICO OS variants).
+          linux-editor-mono is the separate .NET-enabled editor package.
+
+          These are CI build artifacts, not official signed distribution packages. Linux/macOS binaries may need chmod +x after extraction.
+          SHA256SUMS.txt contains SHA-256 checksums for all ZIP assets."
+          fi
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
